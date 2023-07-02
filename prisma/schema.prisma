@@ -1,0 +1,17 @@
+generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["jsonProtocol"]
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Link {
+    id    Int    @id @default(autoincrement())
+    url   String
+    alias String @unique @db.VarChar(6)
+
+    @@index(name: "alias", fields: [alias])
+}
