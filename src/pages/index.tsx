@@ -5,17 +5,19 @@ import ConfettiExplosion, { ConfettiProps } from "react-confetti-explosion";
 import toast from "react-hot-toast";
 import { useMutation } from "react-query";
 import axios from "axios";
+import { z } from "zod";
 
-type TShortenRequest = {
-  url: string;
-};
+const shortenRequestSchema = z.object({
+  url: z.string().url(),
+});
 
-const shortenUrl = async (body: TShortenRequest) => {
+const shortenUrl = async (body: z.infer<typeof shortenRequestSchema>) => {
   return await axios.post("/api/shorten", body);
 };
 
 export default function Home() {
   const [originalUrl, setOriginalUrl] = useState("");
+  const [shortUrl, setShortUrl] = useState("");
   const [isShortened, setIsShortened] = useState(false);
   const [confettiExploding, setConfettiExploding] = useState(false);
 
@@ -32,6 +34,8 @@ export default function Home() {
     mutationFn: shortenUrl,
     onSuccess: (data) => {
       console.log(data.data);
+      setShortUrl(data.data.shortUrl);
+      setIsShortened(true);
     },
     onError: (error) => {
       console.log(error);
@@ -44,11 +48,40 @@ export default function Home() {
 
   const handleShorten = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    toast.promise(shortenMutation.mutateAsync({ url: originalUrl }), {
-      loading: "Shortening...",
-      success: "Shortened!",
-      error: "Failed to shorten",
-    });
+
+    const regexWithProtocol = new RegExp(
+      "^(http[s]?:\\/\\/(www\\.)?|ftp:\\/\\/(www\\.)?|www\\.){1}([0-9A-Za-z-\\.@:%_+~#=]+)+((\\.[a-zA-Z]{2,3})+)(/(.)*)?(\\?(.)*)?"
+    );
+    const regexWithoutProtocol = new RegExp(
+      "^([0-9A-Za-z-\\.@:%_+~#=]+)+((\\.[a-zA-Z]{2,3})+)(/(.)*)?(\\?(.)*)?"
+    );
+
+    let longUrl = originalUrl;
+
+    if (regexWithoutProtocol.test(originalUrl)) {
+      longUrl = `http://${originalUrl}`;
+    }
+
+    if (regexWithProtocol.test(longUrl)) {
+      toast.dismiss("shorten");
+      toast.promise(
+        shortenMutation.mutateAsync({ url: longUrl }),
+        {
+          loading: "Shortening...",
+          success: "Shortened!",
+          error: "Failed to shorten",
+        },
+        {
+          id: "shorten",
+        }
+      );
+    } else {
+      toast.dismiss("invalid-url");
+      toast.error("Enter a valid URL!", {
+        id: "invalid-url",
+      });
+      return;
+    }
   };
 
   return (
@@ -82,35 +115,41 @@ export default function Home() {
               Shorten
             </button>
           </form>
-          <div className="w-full p-4 outline outline-1">
-            <CopyToClipboard
-              text="Bruh moment"
-              // @ts-ignore
-              className="flex w-full items-center justify-center"
-            >
-              <button onClick={() => setConfettiExploding(!confettiExploding)}>
-                <span className="flex gap-6">
-                  <div>https://shortenr.faisaljr.com/123456</div>
-                  <svg
-                    onClick={handleCopiedToast}
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="h-6 w-6 transition-all hover:animate-bounce"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"
-                    />
-                  </svg>
-                </span>
-                {confettiExploding && <ConfettiExplosion {...confettiProps} />}
-              </button>
-            </CopyToClipboard>
-          </div>
+          {isShortened && (
+            <div className="w-full rounded-md bg-green-500 p-4 font-bold outline outline-1">
+              <CopyToClipboard
+                text={shortUrl}
+                // @ts-ignore
+                className="flex w-full items-center justify-center"
+              >
+                <button
+                  onClick={() => setConfettiExploding(!confettiExploding)}
+                >
+                  <span className="flex gap-6">
+                    <div>{shortUrl}</div>
+                    <svg
+                      onClick={handleCopiedToast}
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                      className="h-6 w-6 transition-all hover:animate-bounce"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"
+                      />
+                    </svg>
+                  </span>
+                  {confettiExploding && (
+                    <ConfettiExplosion {...confettiProps} />
+                  )}
+                </button>
+              </CopyToClipboard>
+            </div>
+          )}
         </div>
       </main>
     </>
